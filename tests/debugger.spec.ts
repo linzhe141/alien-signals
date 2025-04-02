@@ -12,5 +12,5 @@ test('debugger', () => {
 		console.log(`effect2-> count2 is: ${count2()}`);
 	});
 	count1(2);
-	count1(200);
+	count2(200);
 });
