@@ -42,9 +42,9 @@ test('debugger 3*3', () => {
 test('computed', () => {
 	const count1 = signal(1);
 	const count2 = signal(222);
-	const double = computed(() => {
+	const double = computed(function getter() {
 		console.log('computed~');
-		return count1() * 0;
+		return count1() * 2;
 	});
 	effect(function foo() {
 		console.log('count2~', count2());
