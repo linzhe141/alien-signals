@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { signal, computed, effect } from '../src';
-test('debugger', () => {
+test('debugger 2*2', () => {
 	const count1 = signal(1);
 	const count2 = signal(100);
 	effect(function fn1() {
