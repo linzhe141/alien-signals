@@ -38,3 +38,21 @@ test('debugger 3*3', () => {
 	count2(200);
 	count3(2000);
 });
+
+test('computed', () => {
+	const count1 = signal(1);
+	const count2 = signal(222);
+	const double = computed(() => {
+		console.log('computed~');
+		return count1() * 0;
+	});
+	effect(function foo() {
+		console.log('count2~', count2());
+		console.log('double~', double());
+	});
+	console.log('change1~~~~~~~~');
+	count1(11);
+	console.log('change2~~~~~~~~');
+	count2(333);
+});
+
