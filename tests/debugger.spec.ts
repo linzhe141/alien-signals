@@ -44,7 +44,7 @@ test('computed', () => {
 	const count2 = signal(222);
 	const double = computed(function getter() {
 		console.log('computed~');
-		return count1() * 2;
+		return count1() * 0;
 	});
 	effect(function foo() {
 		console.log('count2~', count2());
