@@ -56,3 +56,14 @@ test('computed', () => {
 	count2(333);
 });
 
+test('cleanUp', () => {
+	const flag = signal(true);
+	const x = signal(1);
+	const y = signal(2);
+	effect(function foo() {
+		console.log('bar~', flag() ? x() : y());
+	});
+	flag(false)
+	x(11)
+	flag(true)
+});
