@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { signal, computed, effect } from '../src';
+import { signal, computed, effect, startBatch, endBatch } from '../src';
 test('debugger 2*2', () => {
 	const count1 = signal(1);
 	const count2 = signal(100);
@@ -63,7 +63,113 @@ test('cleanUp', () => {
 	effect(function foo() {
 		console.log('bar~', flag() ? x() : y());
 	});
-	flag(false)
-	x(11)
-	flag(true)
+	flag(false);
+	x(11);
+	flag(true);
+});
+
+test('nested effect', () => {
+	const x = signal(1);
+	const y = signal(2);
+	effect(function foo() {
+		console.log('foo~', y());
+		effect(function bar() {
+			console.log('bar~', x());
+		});
+	});
+	// 使用新的newLink关联 effect bar 和 effect foo
+	// 又会使用新的 newLink关联 effect bar 和 signals x
+	// 感觉还有性能提升？
+	y(20);
+	// 很像computed 的流程 换成了PendingEffect
+	x(10);
+});
+
+test('nested effect + cleanUp', () => {
+	const flag = signal(true);
+	const x = signal(1);
+	effect(function foo() {
+		flag() && effect(function bar() {
+			console.log('bar~', x());
+		});
+	});
+	x(10);
+	flag(false);
+	x(100);
+	flag(true);
+});
+
+
+// 对比
+test.todo('batch', () => {
+	const a = signal(0);
+	const b = signal(0);
+	const order: string[] = [];
+
+
+	effect(() => {
+		order.push('first inner');
+		a();
+	});
+
+	effect(() => {
+		order.push('last inner');
+		a();
+		b();
+	});
+
+	order.length = 0;
+
+	startBatch();
+	b(1);
+	a(1);
+	endBatch();
+
+	expect(order).toEqual(['last inner', 'first inner']);
+});
+
+test.todo('batch w/ nested effect', () => {
+	const a = signal(0);
+	const b = signal(0);
+	const order: string[] = [];
+
+	effect(() => {
+
+		effect(() => {
+			order.push('first inner');
+			a();
+		});
+
+		effect(() => {
+			order.push('last inner');
+			a();
+			b();
+		});
+	});
+
+	order.length = 0;
+
+	startBatch();
+	b(1);
+	a(1);
+	endBatch();
+
+	expect(order).toEqual(['first inner', 'last inner']);
+});
+
+test.todo('todo propagate->branchs+branchDepth', () => {
+	const a = signal(false);
+	const b = computed(() => a());
+	const c = computed(() => {
+		b();
+		return 0;
+	});
+	const d = computed(() => {
+		c();
+		return b();
+	});
+
+	expect(d()).toBe(false);
+	a(true);
+	expect(d()).toBe(true);
 });

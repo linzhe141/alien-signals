@@ -88,11 +88,9 @@ test('should not trigger inner effect when resolve maybe dirty', () => {
 test('should trigger inner effects in sequence', () => {
 	const a = signal(0);
 	const b = signal(0);
-	const c = computed(() => a() - b());
 	const order: string[] = [];
 
 	effect(() => {
-		c();
 
 		effect(() => {
 			order.push('first inner');
