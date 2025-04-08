@@ -83,6 +83,8 @@ test('nested effect', () => {
 	y(20);
 	// 很像computed 的流程 换成了PendingEffect
 	x(10);
+	console.log('change~')
+	y(30); // deubgger Effect | Notified 
 });
 
 test('nested effect + cleanUp', () => {
