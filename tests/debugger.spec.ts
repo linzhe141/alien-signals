@@ -83,7 +83,7 @@ test('nested effect', () => {
 	y(20);
 	// 很像computed 的流程 换成了PendingEffect
 	x(10);
-	console.log('change~')
+	console.log('change~');
 	y(30); // deubgger Effect | Notified 
 });
 
@@ -129,21 +129,23 @@ test.todo('batch', () => {
 
 	expect(order).toEqual(['last inner', 'first inner']);
 });
-
-test.todo('batch w/ nested effect', () => {
+// 就是在startBatch后统一收集了所有的effect，endBatch后统一执行了所有的effect
+test('batch w/ nested effect', () => {
 	const a = signal(0);
 	const b = signal(0);
 	const order: string[] = [];
 
-	effect(() => {
-
-		effect(() => {
+	effect(/* 父组件 */() => {
+		console.log('parent effect');
+		effect(/* 组件1 */() => {
 			order.push('first inner');
+			console.log('组件1 effect');
 			a();
 		});
 
-		effect(() => {
+		effect(/* 组件2 */() => {
 			order.push('last inner');
+			console.log('组件2 effect');
 			a();
 			b();
 		});
@@ -151,6 +153,7 @@ test.todo('batch w/ nested effect', () => {
 
 	order.length = 0;
 
+	console.log('batch change~');
 	startBatch();
 	b(1);
 	a(1);
