@@ -162,7 +162,8 @@ test('batch w/ nested effect', () => {
 
 	expect(order).toEqual(['first inner', 'last inner']);
 });
-// 没啥必要看，就是把递归改成了循环，说实话这也不是很好理解
+// branchs+branchDepth 没啥必要看，就是把dfs递归改成了循环，说实话这也不是很好理解
+// 图着色算法算法
 test('propagate->branchs+branchDepth', () => {
 	const a = signal(false);
 	const b = computed(/* getter b */() => a());
