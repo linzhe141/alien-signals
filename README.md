@@ -27,11 +27,17 @@ Even though Vue 3.4 is already optimized, alien-signals is still noticeably fast
 
 I spent considerable time [optimizing Vue 3.4’s reactivity system](https://github.com/vuejs/core/pull/5912), gaining experience along the way. Since Vue 3.5 [switched to a pull-based algorithm similar to Preact](https://github.com/vuejs/core/pull/10397), I decided to continue researching a push-pull based implementation in a separate project. Our end goal is to implement fully incremental AST parsing and virtual code generation in Vue language tools, based on alien-signals.
 
+## Other Language Implementations
+
+- **Lua:** [YanqingXu/alien-signals-in-lua](https://github.com/YanqingXu/alien-signals-in-lua)
+- **Dart:** [medz/alien-signals-dart](https://github.com/medz/alien-signals-dart)
+- **Go:** [delaneyj/alien-signals-go](https://github.com/delaneyj/alien-signals-go)
+- **Luau:** [Nicell/alien-signals-luau](https://github.com/Nicell/alien-signals-luau)
+- **Java:** [CTRL-Neo-Studios/java-alien-signals](https://github.com/CTRL-Neo-Studios/java-alien-signals)
+- **C#:** [CTRL-Neo-Studios/csharp-alien-signals](https://github.com/CTRL-Neo-Studios/csharp-alien-signals)
+
 ## Derived Projects
 
-- [YanqingXu/alien-signals-in-lua](https://github.com/YanqingXu/alien-signals-in-lua): Lua implementation of alien-signals
-- [medz/alien-signals-dart](https://github.com/medz/alien-signals-dart): Dart implementation of alien-signals
-- [delaneyj/alien-signals-go](https://github.com/delaneyj/alien-signals-go): Go implementation of alien-signals
 - [Rajaniraiyn/react-alien-signals](https://github.com/Rajaniraiyn/react-alien-signals): React bindings for the alien-signals API
 - [CCherry07/alien-deepsignals](https://github.com/CCherry07/alien-deepsignals): Use alien-signals with the interface of a plain JavaScript object
 - [hunghg255/reactjs-signal](https://github.com/hunghg255/reactjs-signal): Share Store State with Signal Pattern
@@ -101,56 +107,36 @@ This results in code that is difficult to understand, and you don't necessarily 
 #### `propagate`
 
 ```ts
-function propagate(link: Link, targetFlag = SubscriberFlags.Dirty): void {
+function propagate(link: Link): void {
 	do {
 		const sub = link.sub;
-		const subFlags = sub.flags;
 
-		let shouldNotify = false;
+		let flags = sub.flags;
 
-		if (!(subFlags & (SubscriberFlags.Tracking | SubscriberFlags.Recursed | SubscriberFlags.Propagated))) {
-			sub.flags = subFlags | targetFlag | SubscriberFlags.Notified;
-			shouldNotify = true;
-		} else if ((subFlags & SubscriberFlags.Recursed) && !(subFlags & SubscriberFlags.Tracking)) {
-			sub.flags = (subFlags & ~SubscriberFlags.Recursed) | targetFlag | SubscriberFlags.Notified;
-			shouldNotify = true;
-		} else if (!(subFlags & SubscriberFlags.Propagated) && isValidLink(current, sub)) {
-			sub.flags = subFlags | SubscriberFlags.Recursed | targetFlag | SubscriberFlags.Notified;
-			shouldNotify = (sub as Dependency).subs !== undefined;
-		}
-
-		if (shouldNotify) {
-			const subSubs = (sub as Dependency).subs;
-			if (subSubs !== undefined) {
-				propagate(
-					subSubs,
-					subFlags & SubscriberFlags.Effect
-						? SubscriberFlags.PendingEffect
-						: SubscriberFlags.PendingComputed
-				);
+		if (flags & (ReactiveFlags.Mutable | ReactiveFlags.Watching)) {
+			if (!(flags & (ReactiveFlags.RecursedCheck | ReactiveFlags.Recursed | ReactiveFlags.Dirty | ReactiveFlags.Pending))) {
+				sub.flags = flags | ReactiveFlags.Pending;
+			} else if (!(flags & (ReactiveFlags.RecursedCheck | ReactiveFlags.Recursed))) {
+				flags = ReactiveFlags.None;
+			} else if (!(flags & ReactiveFlags.RecursedCheck)) {
+				sub.flags = (flags & ~ReactiveFlags.Recursed) | ReactiveFlags.Pending;
+			} else if (!(flags & (ReactiveFlags.Dirty | ReactiveFlags.Pending)) && isValidLink(link, sub)) {
+				sub.flags = flags | ReactiveFlags.Recursed | ReactiveFlags.Pending;
+				flags &= ReactiveFlags.Mutable;
+			} else {
+				flags = ReactiveFlags.None;
 			}
-			if (subFlags & SubscriberFlags.Effect) {
-				if (queuedEffectsTail !== undefined) {
-					queuedEffectsTail = queuedEffectsTail.linked = { target: sub, linked: undefined };
-				} else {
-					queuedEffectsTail = queuedEffects = { target: sub, linked: undefined };
+
+			if (flags & ReactiveFlags.Watching) {
+				notify(sub);
+			}
+
+			if (flags & ReactiveFlags.Mutable) {
+				const subSubs = sub.subs;
+				if (subSubs !== undefined) {
+					propagate(subSubs);
 				}
 			}
-		} else if (!(subFlags & (SubscriberFlags.Tracking | targetFlag))) {
-			sub.flags = subFlags | targetFlag | SubscriberFlags.Notified;
-			if ((subFlags & (SubscriberFlags.Effect | SubscriberFlags.Notified)) === SubscriberFlags.Effect) {
-				if (queuedEffectsTail !== undefined) {
-					queuedEffectsTail = queuedEffectsTail.linked = { target: sub, linked: undefined };
-				} else {
-					queuedEffectsTail = queuedEffects = { target: sub, linked: undefined };
-				}
-			}
-		} else if (
-			!(subFlags & targetFlag)
-			&& (subFlags & SubscriberFlags.Propagated)
-			&& isValidLink(link, sub)
-		) {
-			sub.flags = subFlags | targetFlag;
 		}
 
 		link = link.nextSub!;
@@ -161,33 +147,35 @@ function propagate(link: Link, targetFlag = SubscriberFlags.Dirty): void {
 #### `checkDirty`
 
 ```ts
-function checkDirty(link: Link): boolean {
+function checkDirty(link: Link, sub: ReactiveNode): boolean {
 	do {
 		const dep = link.dep;
-		if ('flags' in dep) {
-			const depFlags = dep.flags;
-			if ((depFlags & (SubscriberFlags.Computed | SubscriberFlags.Dirty)) === (SubscriberFlags.Computed | SubscriberFlags.Dirty)) {
-				if (updateComputed(dep)) {
+		const depFlags = dep.flags;
+
+		if (sub.flags & ReactiveFlags.Dirty) {
+			return true;
+		} else if ((depFlags & (ReactiveFlags.Mutable | ReactiveFlags.Dirty)) === (ReactiveFlags.Mutable | ReactiveFlags.Dirty)) {
+			if (update(dep)) {
+				const subs = dep.subs!;
+				if (subs.nextSub !== undefined) {
+					shallowPropagate(subs);
+				}
+				return true;
+			}
+		} else if ((depFlags & (ReactiveFlags.Mutable | ReactiveFlags.Pending)) === (ReactiveFlags.Mutable | ReactiveFlags.Pending)) {
+			if (checkDirty(dep.deps!, dep)) {
+				if (update(dep)) {
 					const subs = dep.subs!;
 					if (subs.nextSub !== undefined) {
 						shallowPropagate(subs);
 					}
 					return true;
 				}
-			} else if ((depFlags & (SubscriberFlags.Computed | SubscriberFlags.PendingComputed)) === (SubscriberFlags.Computed | SubscriberFlags.PendingComputed)) {
-				if (checkDirty(dep.deps!)) {
-					if (updateComputed(dep)) {
-						const subs = dep.subs!;
-						if (subs.nextSub !== undefined) {
-							shallowPropagate(subs);
-						}
-						return true;
-					}
-				} else {
-					dep.flags = depFlags & ~SubscriberFlags.PendingComputed;
-				}
+			} else {
+				dep.flags = depFlags & ~ReactiveFlags.Pending;
 			}
 		}
+
 		link = link.nextDep!;
 	} while (link !== undefined);
 
