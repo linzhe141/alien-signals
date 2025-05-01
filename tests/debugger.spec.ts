@@ -80,7 +80,8 @@ test('nested effect', () => {
 	// 使用新的newLink关联 effect bar 和 effect foo
 	// 又会使用新的 newLink关联 effect bar 和 signals x
 	// 感觉还有性能提升？
-	y(20);
+	y(20); // 依次打印 foo~ 20 bar~ 1
+
 	// 很像computed 的流程 换成了PendingEffect
 	x(10);
 	console.log('change~');
@@ -161,15 +162,16 @@ test('batch w/ nested effect', () => {
 
 	expect(order).toEqual(['first inner', 'last inner']);
 });
-
-test.todo('todo propagate->branchs+branchDepth', () => {
+// branchs+branchDepth 没啥必要看，就是把dfs递归改成了循环，说实话这也不是很好理解
+// 图着色算法算法
+test('propagate->branchs+branchDepth', () => {
 	const a = signal(false);
-	const b = computed(() => a());
-	const c = computed(() => {
+	const b = computed(/* getter b */() => a());
+	const c = computed(/* getter c */() => {
 		b();
 		return 0;
 	});
-	const d = computed(() => {
+	const d = computed(/* getter d */() => {
 		c();
 		return b();
 	});
