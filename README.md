@@ -4,6 +4,7 @@
 
 <p align="center">
 	<a href="https://npmjs.com/package/alien-signals"><img src="https://badgen.net/npm/v/alien-signals" alt="npm package"></a>
+	<a href="https://deepwiki.com/stackblitz/alien-signals"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 # alien-signals
@@ -15,7 +16,7 @@ This project explores a push-pull based signal algorithm. Its current implementa
 - Inner effects scheduling of Svelte
 - Graph-coloring approach of Reactively (https://milomg.dev/2022-12-01/reactivity)
 
-We impose some constraints (such as not using Array/Set/Map and disallowing function recursion) to ensure performance. We found that under these conditions, maintaining algorithmic simplicity offers more significant improvements than complex scheduling strategies.
+We impose some constraints (such as not using Array/Set/Map and disallowing function recursion in [the algorithmic core](https://github.com/stackblitz/alien-signals/blob/master/src/system.ts)) to ensure performance. We found that under these conditions, maintaining algorithmic simplicity offers more significant improvements than complex scheduling strategies.
 
 Even though Vue 3.4 is already optimized, alien-signals is still noticeably faster. (I wrote code for both, and since they share similar algorithms, they’re quite comparable.)
 
@@ -29,12 +30,13 @@ I spent considerable time [optimizing Vue 3.4’s reactivity system](https://git
 
 ## Other Language Implementations
 
-- **Lua:** [YanqingXu/alien-signals-in-lua](https://github.com/YanqingXu/alien-signals-in-lua)
 - **Dart:** [medz/alien-signals-dart](https://github.com/medz/alien-signals-dart)
-- **Go:** [delaneyj/alien-signals-go](https://github.com/delaneyj/alien-signals-go)
+- **Lua:** [YanqingXu/alien-signals-in-lua](https://github.com/YanqingXu/alien-signals-in-lua)
+- **Lua 5.4:** [xuhuanzy/alien-signals-lua](https://github.com/xuhuanzy/alien-signals-lua)
 - **Luau:** [Nicell/alien-signals-luau](https://github.com/Nicell/alien-signals-luau)
 - **Java:** [CTRL-Neo-Studios/java-alien-signals](https://github.com/CTRL-Neo-Studios/java-alien-signals)
 - **C#:** [CTRL-Neo-Studios/csharp-alien-signals](https://github.com/CTRL-Neo-Studios/csharp-alien-signals)
+- **Go:** [delaneyj/alien-signals-go](https://github.com/delaneyj/alien-signals-go)
 
 ## Derived Projects
 
@@ -42,11 +44,16 @@ I spent considerable time [optimizing Vue 3.4’s reactivity system](https://git
 - [CCherry07/alien-deepsignals](https://github.com/CCherry07/alien-deepsignals): Use alien-signals with the interface of a plain JavaScript object
 - [hunghg255/reactjs-signal](https://github.com/hunghg255/reactjs-signal): Share Store State with Signal Pattern
 - [gn8-ai/universe-alien-signals](https://github.com/gn8-ai/universe-alien-signals): Enables simple use of the Alien Signals state management system in modern frontend frameworks
+- [WebReflection/alien-signals](https://github.com/WebReflection/alien-signals): Preact signals like API and a class based approach for easy brand check
+- [@lift-html/alien](https://github.com/JLarky/lift-html/tree/main/packages/alien): Integrating alien-signals into lift-html
 
 ## Adoption
 
-- [vuejs/core](https://github.com/vuejs/core): The core algorithm has been ported to 3.6 or higher (PR：https://github.com/vuejs/core/pull/12349)
+- [vuejs/core](https://github.com/vuejs/core): The core algorithm has been ported to v3.6 (PR: https://github.com/vuejs/core/pull/12349)
+- [statelyai/xstate](https://github.com/statelyai/xstate): The core algorithm has been ported to implement the atom architecture (PR: https://github.com/statelyai/xstate/pull/5250)
+- [flamrdevs/xignal](https://github.com/flamrdevs/xignal): Infrastructure for the reactive system
 - [vuejs/language-tools](https://github.com/vuejs/language-tools): Used in the language-core package for virtual code generation
+- [unuse](https://github.com/un-ts/unuse): A framework-agnostic `use` library inspired by `VueUse`
 
 ## Usage
 
@@ -113,29 +120,27 @@ function propagate(link: Link): void {
 
 		let flags = sub.flags;
 
-		if (flags & (ReactiveFlags.Mutable | ReactiveFlags.Watching)) {
-			if (!(flags & (ReactiveFlags.RecursedCheck | ReactiveFlags.Recursed | ReactiveFlags.Dirty | ReactiveFlags.Pending))) {
-				sub.flags = flags | ReactiveFlags.Pending;
-			} else if (!(flags & (ReactiveFlags.RecursedCheck | ReactiveFlags.Recursed))) {
-				flags = ReactiveFlags.None;
-			} else if (!(flags & ReactiveFlags.RecursedCheck)) {
-				sub.flags = (flags & ~ReactiveFlags.Recursed) | ReactiveFlags.Pending;
-			} else if (!(flags & (ReactiveFlags.Dirty | ReactiveFlags.Pending)) && isValidLink(link, sub)) {
-				sub.flags = flags | ReactiveFlags.Recursed | ReactiveFlags.Pending;
-				flags &= ReactiveFlags.Mutable;
-			} else {
-				flags = ReactiveFlags.None;
-			}
+		if (!(flags & (ReactiveFlags.RecursedCheck | ReactiveFlags.Recursed | ReactiveFlags.Dirty | ReactiveFlags.Pending))) {
+			sub.flags = flags | ReactiveFlags.Pending;
+		} else if (!(flags & (ReactiveFlags.RecursedCheck | ReactiveFlags.Recursed))) {
+			flags = ReactiveFlags.None;
+		} else if (!(flags & ReactiveFlags.RecursedCheck)) {
+			sub.flags = (flags & ~ReactiveFlags.Recursed) | ReactiveFlags.Pending;
+		} else if (!(flags & (ReactiveFlags.Dirty | ReactiveFlags.Pending)) && isValidLink(link, sub)) {
+			sub.flags = flags | ReactiveFlags.Recursed | ReactiveFlags.Pending;
+			flags &= ReactiveFlags.Mutable;
+		} else {
+			flags = ReactiveFlags.None;
+		}
 
-			if (flags & ReactiveFlags.Watching) {
-				notify(sub);
-			}
+		if (flags & ReactiveFlags.Watching) {
+			notify(sub);
+		}
 
-			if (flags & ReactiveFlags.Mutable) {
-				const subSubs = sub.subs;
-				if (subSubs !== undefined) {
-					propagate(subSubs);
-				}
+		if (flags & ReactiveFlags.Mutable) {
+			const subSubs = sub.subs;
+			if (subSubs !== undefined) {
+				propagate(subSubs);
 			}
 		}
 

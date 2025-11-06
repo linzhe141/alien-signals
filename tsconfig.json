@@ -1,16 +1,13 @@
 {
 	"compilerOptions": {
-		"target": "ES2021",
-		"lib": [ "ES2021" ],
-		"module": "CommonJS",
-		"declaration": true,
-		"emitDeclarationOnly": true,
+		"target": "ESNext",
 		"strict": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"skipLibCheck": true,
 		"rootDir": "src",
-		"outDir": "types",
+		"isolatedModules": false,
+		"preserveConstEnums": true,
 	},
 	"include": [ "src" ],
 }

@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
-import { computed, effect, effectScope, endBatch, pauseTracking, resumeTracking, signal, startBatch } from '../src';
+import { computed, effect, effectScope, endBatch, getActiveSub, setActiveSub, signal, startBatch } from '../src';
+import { ReactiveFlags } from '../src/system';
 
 test('should clear subscriptions when untracked by all subscribers', () => {
 	let bRunTimes = 0;
@@ -81,62 +82,61 @@ test('should not trigger inner effect when resolve maybe dirty', () => {
 	a(2);
 });
 
-test('should trigger inner effects in sequence', () => {
+test('should notify inner effects in the same order as non-inner effects', () => {
 	const a = signal(0);
 	const b = signal(0);
-	const order: string[] = [];
+	const c = computed(() => a() - b());
+	const order1: string[] = [];
+	const order2: string[] = [];
+	const order3: string[] = [];
 
 	effect(() => {
+		order1.push('effect1');
+		a();
+	});
+	effect(() => {
+		order1.push('effect2');
+		a();
+		b();
+	});
 
+	effect(() => {
+		c();
 		effect(() => {
-			order.push('first inner');
+			order2.push('effect1');
 			a();
 		});
-
 		effect(() => {
-			order.push('last inner');
+			order2.push('effect2');
 			a();
 			b();
 		});
 	});
-
-	order.length = 0;
-
-	startBatch();
-	b(1);
-	a(1);
-	endBatch();
-
-	expect(order).toEqual(['first inner', 'last inner']);
-});
-
-test('should trigger inner effects in sequence in effect scope', () => {
-	const a = signal(0);
-	const b = signal(0);
-	const order: string[] = [];
 
 	effectScope(() => {
-
 		effect(() => {
-			order.push('first inner');
+			order3.push('effect1');
 			a();
 		});
-
 		effect(() => {
-			order.push('last inner');
+			order3.push('effect2');
 			a();
 			b();
 		});
 	});
 
-	order.length = 0;
+	order1.length = 0;
+	order2.length = 0;
+	order3.length = 0;
 
 	startBatch();
 	b(1);
 	a(1);
 	endBatch();
 
-	expect(order).toEqual(['first inner', 'last inner']);
+	expect(order1).toEqual(['effect2', 'effect1']);
+	expect(order2).toEqual(order1);
+	expect(order3).toEqual(order1);
 });
 
 test('should custom effect support batch', () => {
@@ -157,7 +157,7 @@ test('should custom effect support batch', () => {
 
 	const aa = computed(() => {
 		logs.push('aa-0');
-		if (a() === 0) {
+		if (!a()) {
 			b(1);
 		}
 		logs.push('aa-1');
@@ -185,9 +185,9 @@ test('should duplicate subscribers do not affect the notify order', () => {
 
 	effect(() => {
 		order.push('a');
-		pauseTracking();
+		const currentSub = setActiveSub();
 		const isOne = src2() === 1;
-		resumeTracking();
+		setActiveSub(currentSub);
 		if (isOne) {
 			src1();
 		}
@@ -250,4 +250,39 @@ test('should handle flags are indirectly updated during checkDirty', () => {
 	expect(triggers).toBe(1);
 	a(true);
 	expect(triggers).toBe(2);
+});
+
+test('should handle effect recursion for the first execution', () => {
+	const src1 = signal(0);
+	const src2 = signal(0);
+
+	let triggers1 = 0;
+	let triggers2 = 0;
+
+	effect(() => {
+		triggers1++;
+		src1(Math.min(src1() + 1, 5));
+	});
+	effect(() => {
+		triggers2++;
+		src2(Math.min(src2() + 1, 5));
+		src2();
+	});
+
+	expect(triggers1).toBe(1);
+	expect(triggers2).toBe(1);
+});
+
+test('should support custom recurse effect', () => {
+	const src = signal(0);
+
+	let triggers = 0;
+
+	effect(() => {
+		getActiveSub()!.flags &= ~ReactiveFlags.RecursedCheck;
+		triggers++;
+		src(Math.min(src() + 1, 5));
+	});
+
+	expect(triggers).toBe(6);
 });
